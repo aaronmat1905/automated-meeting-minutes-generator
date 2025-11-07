@@ -255,9 +255,9 @@ class TranscriptionService:
                 total_confidence += alternative.confidence
                 word_count += 1
 
-        # Calculate average confidence
+        # Calculate average confidence (average per word)
         if word_count > 0:
-            result['confidence'] = total_confidence / len(response.results)
+            result['confidence'] = total_confidence / word_count
 
         # Clean up transcript
         result['full_transcript'] = result['full_transcript'].strip()

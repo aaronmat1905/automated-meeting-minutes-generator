@@ -246,6 +246,39 @@ class TestGeminiAgent:
         assert all('due_date' in item for item in result)
 
     @patch('src.services.gemini_agent.genai')
+    def test_owner_inference(self, mock_genai, config):
+        """Test owner inference from transcript speaker lines"""
+        mock_model = MagicMock()
+        # Return one action item without owner, but with source_text that matches Sarah's line
+        mock_response = MagicMock()
+        mock_response.text = json.dumps([
+            {
+                "description": "Finish frontend by Friday",
+                "owner": "",
+                "due_date": "Not specified",
+                "priority": "high",
+                "confidence": 0.95,
+                "context": "Frontend work",
+                "source_text": "I'll finish it by Friday"
+            }
+        ])
+        mock_model.generate_content.return_value = mock_response
+        mock_genai.GenerativeModel.return_value = mock_model
+
+        agent = GeminiAgent(config)
+
+        sample_transcript = """
+        John: Kickoff
+        Sarah: I'll finish it by Friday
+        """
+
+        action_items = agent.extract_action_items(sample_transcript)
+
+        assert len(action_items) == 1
+        assert action_items[0]['owner'] == 'Sarah'
+        assert action_items[0].get('owner_inferred') is True
+
+    @patch('src.services.gemini_agent.genai')
     def test_custom_query(self, mock_genai, config, sample_transcript):
         """Test custom query about transcript"""
         mock_model = MagicMock()

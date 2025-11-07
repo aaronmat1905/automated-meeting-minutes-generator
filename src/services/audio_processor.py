@@ -10,6 +10,12 @@ from typing import Tuple, Dict, Optional
 from pydub import AudioSegment
 
 try:
+    import librosa
+except Exception:
+    # librosa is optional for the simplified local version
+    librosa = None
+
+try:
     from src.config_simple import Config
 except ImportError:
     from src.config import Config
@@ -105,8 +111,38 @@ class AudioProcessor:
         Returns:
             List of quality issues found
         """
-        # Quality check disabled in simplified version
-        return []
+        issues = []
+
+        # If librosa is not available, skip quality checks
+        if not librosa:
+            return issues
+
+        try:
+            # Use librosa to load and analyze audio
+            y, sr = librosa.load(str(file_path), sr=None)
+            # Convert to mono if necessary
+            try:
+                y_mono = librosa.to_mono(y)
+            except Exception:
+                y_mono = y
+
+            # Compute RMS (root mean square) energy
+            rms = librosa.feature.rms(y=y_mono)
+            avg_rms = float(rms.mean()) if hasattr(rms, 'mean') else float(sum(rms[0]) / len(rms[0]))
+
+            # Thresholds (tunable)
+            SILENCE_RMS_THRESHOLD = 0.005
+            LOW_SNR_THRESHOLD = 0.01
+
+            if avg_rms <= SILENCE_RMS_THRESHOLD:
+                issues.append('silence_or_near_silence')
+            elif avg_rms <= LOW_SNR_THRESHOLD:
+                issues.append('low_snr')
+
+        except Exception as e:
+            logger.debug(f"Audio quality check error: {str(e)}")
+
+        return issues
 
     def convert_to_wav(self, input_path: str, output_path: Optional[str] = None) -> str:
         """
@@ -165,9 +201,9 @@ class AudioProcessor:
             audio = AudioSegment.from_file(str(file_path))
             chunks = []
 
-            # Calculate number of chunks
+            # Calculate number of chunks (use ceiling division)
             total_duration = len(audio)
-            num_chunks = (total_duration // chunk_duration_ms) + 1
+            num_chunks = (total_duration + chunk_duration_ms - 1) // chunk_duration_ms
 
             logger.info(f"Splitting audio into {num_chunks} chunks...")
 

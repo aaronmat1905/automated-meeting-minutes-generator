@@ -129,6 +129,9 @@ JSON OUTPUT:
             response = self.model.generate_content(prompt)
             action_items = self._parse_json_response(response.text)
 
+            # Auto-assign owners when missing using transcript heuristics
+            action_items = self._assign_owners(action_items, transcript, meeting_metadata)
+
             # Auto-assign due dates for items without explicit dates
             action_items = self._infer_due_dates(action_items)
 
@@ -486,6 +489,107 @@ JSON OUTPUT:
                 item['due_date_inferred'] = True
             else:
                 item['due_date_inferred'] = False
+
+        return action_items
+
+    def _assign_owners(
+        self,
+        action_items: List[Dict],
+        transcript: str,
+        meeting_metadata: Optional[Dict] = None,
+    ) -> List[Dict]:
+        """
+        Try to infer owners for action items when the owner field is missing or unassigned.
+
+        Heuristics used (in order):
+        - If source_text includes an email, use that as owner
+        - Match speaker lines in the transcript like 'Sarah: I'll do X' and map that speaker
+          to action items whose source_text appears in the same line
+        - Use simple regexes to find patterns like 'Can Sarah', 'Sarah will', 'assign to Mike'
+        - Match against meeting participants (if provided)
+
+        This function sets `owner` and `owner_inferred` flags when it infers an owner.
+        """
+
+        participants = []
+        if meeting_metadata and meeting_metadata.get('participants'):
+            participants = meeting_metadata.get('participants')
+
+        # Pre-scan transcript lines for speaker: content patterns
+        lines = [l.strip() for l in transcript.splitlines() if l.strip()]
+
+        for item in action_items:
+            owner = item.get('owner')
+            if owner and str(owner).strip() and str(owner).lower() not in ('unassigned', 'none', 'not specified'):
+                item['owner_inferred'] = False
+                continue
+
+            source_text = (item.get('source_text') or '').strip()
+            text_blob = (source_text + '\n' + transcript).strip()
+
+            # 1) email address in source_text or transcript
+            email_match = re.search(r"[\w\.-]+@[\w\.-]+", text_blob)
+            if email_match:
+                item['owner'] = email_match.group(0)
+                item['owner_inferred'] = True
+                continue
+
+            # 2) match speaker lines like 'Sarah: I'll do X' and that line contains the source_text
+            matched = False
+            for line in lines:
+                m = re.match(r"^([A-Z][A-Za-z0-9_\-]+)\s*:\s*(.*)$", line)
+                if m:
+                    speaker = m.group(1)
+                    content = m.group(2)
+                    # if the source_text appears verbatim in the speaker's content, attribute to speaker
+                    if source_text and source_text in content:
+                        item['owner'] = speaker
+                        item['owner_inferred'] = True
+                        matched = True
+                        break
+                    # if content contains common ownership verbs and the speaker is mentioned, attribute
+                    if re.search(r"\b(will|can you|i'll|i will|let me|assign|i can)\b", content, re.I):
+                        # if source_text shares words with content (simple overlap), attribute
+                        if source_text and len(set(source_text.lower().split()) & set(content.lower().split())) >= 2:
+                            item['owner'] = speaker
+                            item['owner_inferred'] = True
+                            matched = True
+                            break
+            if matched:
+                continue
+
+            # 3) check participants list
+            for p in participants:
+                if re.search(r"\b" + re.escape(p) + r"\b", text_blob, re.I):
+                    item['owner'] = p
+                    item['owner_inferred'] = True
+                    matched = True
+                    break
+            if matched:
+                continue
+
+            # 4) regex patterns in source_text / transcript
+            name_patterns = [
+                r"\b([A-Z][a-z]{2,}(?:\s[A-Z][a-z]{2,})?)\s+(?:will|shall|can|to|is going to|is going)\b",
+                r"\bcan\s+([A-Z][a-z]{2,})\b",
+                r"assign(?:ed)? to\s+([A-Z][a-z]{2,})\b",
+            ]
+
+            for pat in name_patterns:
+                m = re.search(pat, text_blob)
+                if m:
+                    candidate = m.group(1)
+                    item['owner'] = candidate
+                    item['owner_inferred'] = True
+                    matched = True
+                    break
+
+            if matched:
+                continue
+
+            # if no owner found, leave as Unassigned and mark inferred False
+            item['owner'] = item.get('owner') or 'Unassigned'
+            item['owner_inferred'] = False
 
         return action_items
 

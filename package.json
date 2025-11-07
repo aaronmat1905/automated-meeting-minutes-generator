@@ -1,0 +1,13 @@
+{
+  "name": "meeting-minutes-project",
+  "version": "1.0.0",
+  "description": "AI-powered meeting transcription and minutes generation",
+  "scripts": {
+    "test": "pytest",
+    "lint": "flake8 src/",
+    "format": "black src/"
+  },
+  "keywords": ["meeting", "transcription", "AI", "minutes"],
+  "author": "Your Team",
+  "license": "MIT"
+}

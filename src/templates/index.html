@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting Minutes Generator | AI-Powered Documentation</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="header-content">
+                <div class="logo">
+                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                        <rect width="40" height="40" rx="8" fill="#2563EB"/>
+                        <path d="M12 20L18 26L28 14" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <div class="logo-text">
+                        <h1>Meeting Minutes</h1>
+                        <p>AI-Powered Documentation Platform</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main>
+            <!-- Upload Section -->
+            <section class="card">
+                <h2>Upload Meeting Recording</h2>
+                <p class="section-description">Upload your audio or video file to generate comprehensive meeting minutes</p>
+
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label for="audioFile">Audio File</label>
+                        <input type="file" id="audioFile" name="file" accept="audio/*,video/*" required>
+                        <small>Supported: MP3, WAV, MP4, M4A, FLAC, OGG, WebM (max 100MB)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="meetingTitle">Meeting Title</label>
+                        <input type="text" id="meetingTitle" placeholder="e.g., Weekly Team Standup" value="Team Meeting" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="meetingDate">Date</label>
+                            <input type="date" id="meetingDate" value="">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="language">Language</label>
+                            <select id="language">
+                                <option value="en">English</option>
+                                <option value="es">Spanish</option>
+                                <option value="fr">French</option>
+                                <option value="de">German</option>
+                                <option value="zh">Chinese</option>
+                                <option value="ja">Japanese</option>
+                                <option value="hi">Hindi</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="participants">Participants (comma-separated)</label>
+                        <input type="text" id="participants" placeholder="John Doe, Jane Smith, Alice Johnson" value="Team Members">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="agenda">Agenda (optional)</label>
+                        <textarea id="agenda" rows="3" placeholder="Meeting topics and discussion points...">Project updates and action items</textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="template">Minutes Template</label>
+                            <select id="template">
+                                <option value="MRS">MRS - Meeting Recording System</option>
+                                <option value="MTQP">MTQP - Topics, Questions, Points</option>
+                                <option value="MSAD">MSAD - Summary & Action Dashboard</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Export Formats</label>
+                            <div class="checkbox-group">
+                                <label><input type="checkbox" name="format" value="pdf" checked> PDF</label>
+                                <label><input type="checkbox" name="format" value="markdown" checked> Markdown</label>
+                                <label><input type="checkbox" name="format" value="txt"> Text</label>
+                                <label><input type="checkbox" name="format" value="docx"> Word</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="processBtn">
+                        <span class="btn-text">Generate Minutes</span>
+                        <span class="spinner" style="display:none;"></span>
+                    </button>
+                </form>
+            </section>
+
+            <!-- Progress Section -->
+            <section class="card" id="progressSection" style="display:none;">
+                <h2>Processing</h2>
+                <div class="progress-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <p id="progressText">Starting...</p>
+            </section>
+
+            <!-- Results Section -->
+            <section class="card" id="resultsSection" style="display:none;">
+                <h2>Meeting Analysis Results</h2>
+
+                <!-- Transcript -->
+                <div class="result-item">
+                    <h3>Transcript</h3>
+                    <div class="transcript-box" id="transcriptBox"></div>
+                    <button class="btn btn-secondary btn-sm" onclick="copyTranscript()">Copy Transcript</button>
+                </div>
+
+                <!-- Action Items -->
+                <div class="result-item">
+                    <h3>Action Items</h3>
+                    <div id="actionItemsBox"></div>
+                </div>
+
+                <!-- Decisions -->
+                <div class="result-item">
+                    <h3>Key Decisions</h3>
+                    <div id="decisionsBox"></div>
+                </div>
+
+                <!-- Executive Summary -->
+                <div class="result-item">
+                    <h3>Executive Summary</h3>
+                    <div id="summaryBox"></div>
+                </div>
+
+                <!-- Download Files -->
+                <div class="result-item">
+                    <h3>Download Documentation</h3>
+                    <div id="downloadLinks" class="download-grid"></div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer>
+            <div class="footer-content">
+                <p>&copy; 2025 Meeting Minutes Generator | Ramen Noodles Team - PES University</p>
+                <p class="footer-tech">Powered by Google Gemini AI & AssemblyAI</p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

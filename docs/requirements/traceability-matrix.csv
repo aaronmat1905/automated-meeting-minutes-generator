@@ -1,0 +1,9 @@
+Req ID,Requirement,User Story,Feature Branch,PR#,Test Case,Status
+MMF001,Audio upload MP3/WAV/MP4,US-001,feature/audio-upload,#12,TC-UPLOAD-01,Done
+MMF010,Transcription WER less than or equal to 5 percent,US-004,feature/whisper-transcription,#15,TC-TRANS-01,Done
+MMF011,Speaker diarization 8 speakers,US-005,feature/speaker-diarization,#18,TC-DIAR-01,Done
+MMF020,Extract action items 90 percent precision,US-008,feature/ai-action-extraction,#23,TC-AI-01,In Progress
+MMF030,Generate minutes MRS/MTQP/MSAD,US-013,feature/document-templates,#28,TC-DOC-01,To Do
+MMF040,Export PDF/Markdown/Text,US-014,feature/export-formats,#30,TC-EXP-01,To Do
+MMF050,Jira/Asana sync,US-016,feature/task-sync,#35,TC-SYNC-01,To Do
+MMF060,Calendar integration,US-017,feature/calendar-integration,#38,TC-CAL-01,To Do

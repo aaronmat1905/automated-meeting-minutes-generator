@@ -14,6 +14,12 @@ try:
 except ImportError:
     from src.config import Config
 
+# Optional librosa import for audio quality checks (may not be installed in simplified env)
+try:
+    import librosa  # type: ignore
+except Exception:
+    librosa = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -97,7 +103,7 @@ class AudioProcessor:
     def _check_audio_quality(self, file_path: str) -> list:
         """
         Check audio quality and flag potential issues
-        (Disabled in simplified version - requires librosa)
+        Uses librosa if available to compute RMS and detect low SNR or silence.
 
         Args:
             file_path: Path to the audio file
@@ -105,8 +111,41 @@ class AudioProcessor:
         Returns:
             List of quality issues found
         """
-        # Quality check disabled in simplified version
-        return []
+        issues = []
+
+        if librosa is None:
+            # librosa not available in this environment
+            return issues
+
+        try:
+            # Load audio with librosa (preserve native sample rate)
+            y, sr = librosa.load(file_path, sr=None)
+
+            # Convert to mono if necessary
+            try:
+                y_mono = librosa.to_mono(y)
+            except Exception:
+                y_mono = y
+
+            # Compute RMS energy
+            rms = librosa.feature.rms(y=y_mono)
+            import numpy as _np
+
+            mean_rms = float(_np.mean(rms)) if rms is not None and rms.size > 0 else 0.0
+
+            # Simple thresholds for issues (tunable)
+            if mean_rms < 0.01:
+                issues.append('Low SNR or silence detected')
+
+            # Very short audio
+            duration_sec = len(y_mono) / float(sr) if sr and len(y_mono) > 0 else 0
+            if duration_sec < 1.0:
+                issues.append('Audio too short')
+
+        except Exception as e:
+            logger.debug(f"Audio quality check failed: {e}")
+
+        return issues
 
     def convert_to_wav(self, input_path: str, output_path: Optional[str] = None) -> str:
         """
@@ -165,9 +204,10 @@ class AudioProcessor:
             audio = AudioSegment.from_file(str(file_path))
             chunks = []
 
-            # Calculate number of chunks
+            # Calculate number of chunks (use ceiling division)
             total_duration = len(audio)
-            num_chunks = (total_duration // chunk_duration_ms) + 1
+            # number of chunks = ceil(total_duration / chunk_duration_ms)
+            num_chunks = (total_duration + chunk_duration_ms - 1) // chunk_duration_ms
 
             logger.info(f"Splitting audio into {num_chunks} chunks...")
 

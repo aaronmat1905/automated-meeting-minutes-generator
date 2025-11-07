@@ -21,7 +21,10 @@ jobs:
       run: flake8 src/
     - name: Run unit tests
       run: pytest tests/unit/
-    - name: Run integration tests
+    - name: Run integration tests (only for develop branch)
+      if: >-
+        (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'develop') ||
+        startsWith(github.ref, 'refs/heads/develop')
       run: pytest tests/integration/
     - name: Generate coverage report
       run: pytest --cov=src tests/

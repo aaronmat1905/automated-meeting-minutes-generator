@@ -366,7 +366,7 @@ def process_meeting():
         return jsonify({'error': 'Internal server error'}), 500
 
 
-@app.route('/api/update-speakers', methods=['POST'])
+@app.route('/api/update-speakers', methods=['POST', 'PUT', 'PATCH'])
 def update_speaker_labels():
     """
     Update speaker labels in transcript

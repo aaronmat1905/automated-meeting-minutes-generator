@@ -1,6 +1,6 @@
 """
 Integration Services
-Google Calendar, Jira, and Asana integrations for action item syncing
+Google Calendar, Outlook Calendar, Jira, and Asana integrations for action item syncing
 """
 
 import logging
@@ -12,8 +12,9 @@ from google.oauth2.credentials import Credentials
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from O365 import Account, FileSystemTokenBackend
 from jira import JIRA
-from asana import Client
+import asana
 
 from src.config import Config
 
@@ -167,6 +168,166 @@ class GoogleCalendarIntegration:
             raise IntegrationError(f"Failed to retrieve calendar event: {str(e)}")
 
 
+class OutlookCalendarIntegration:
+    """Microsoft Outlook/O365 Calendar integration for action item reminders"""
+
+    def __init__(self, config: Config):
+        self.config = config
+
+        # Initialize O365 Account
+        if not all([config.OUTLOOK_CLIENT_ID, config.OUTLOOK_CLIENT_SECRET]):
+            raise IntegrationError("Outlook Calendar credentials not configured")
+
+        credentials = (config.OUTLOOK_CLIENT_ID, config.OUTLOOK_CLIENT_SECRET)
+        
+        # Use file-based token storage for persistence
+        token_backend = FileSystemTokenBackend(token_path='.', token_filename='o365_token.txt')
+        
+        self.account = Account(
+            credentials,
+            tenant_id=config.OUTLOOK_TENANT_ID,
+            token_backend=token_backend
+        )
+
+        # Authenticate if needed
+        if not self.account.is_authenticated:
+            # For server-side apps, you'll need to implement OAuth flow
+            # This is a placeholder - actual implementation depends on auth method
+            if self.account.authenticate(scopes=config.OUTLOOK_SCOPES):
+                logger.info("Outlook Calendar authenticated successfully")
+            else:
+                raise IntegrationError("Failed to authenticate with Outlook Calendar")
+
+    def create_action_item_events(
+        self,
+        action_items: List[Dict],
+        meeting_title: str,
+        calendar_name: str = None
+    ) -> List[Dict]:
+        """
+        Create Outlook calendar events for action items with due dates
+
+        Args:
+            action_items: List of action item dictionaries
+            meeting_title: Title of the meeting
+            calendar_name: Calendar name (default: default calendar)
+
+        Returns:
+            List of created event IDs and links
+        """
+        schedule = self.account.schedule()
+        calendar = schedule.get_default_calendar() if not calendar_name else schedule.get_calendar(calendar_name=calendar_name)
+
+        if not calendar:
+            raise IntegrationError("Could not access Outlook calendar")
+
+        created_events = []
+
+        for item in action_items:
+            if not item.get('due_date'):
+                continue
+
+            try:
+                # Parse due date
+                due_date = datetime.strptime(item['due_date'], '%Y-%m-%d')
+
+                # Create event
+                event = calendar.new_event()
+                event.subject = f"[Action Item] {item.get('description', 'No description')[:100]}"
+                event.body = self._format_action_item_description(item, meeting_title)
+                
+                # Set as all-day event on due date
+                event.start = due_date
+                event.end = due_date + timedelta(hours=1)  # 1-hour duration
+                event.is_all_day = True
+
+                # Set reminder for 24 hours before (1 day = 1440 minutes)
+                event.remind_before_minutes = 1440
+
+                # Add attendee if owner email is available
+                if item.get('owner') and '@' in item['owner']:
+                    event.attendees.add(item['owner'])
+
+                # Save event
+                event.save()
+
+                created_events.append({
+                    'action_item': item['description'],
+                    'event_id': event.object_id,
+                    'event_link': event.web_link if hasattr(event, 'web_link') else None,
+                    'due_date': item['due_date']
+                })
+
+                logger.info(f"Created Outlook calendar event for action item: {item['description'][:50]}")
+
+            except Exception as e:
+                logger.error(f"Error creating Outlook calendar event: {str(e)}")
+                continue
+
+        return created_events
+
+    def update_event_on_completion(
+        self,
+        event_id: str,
+        completed: bool = True,
+        calendar_name: str = None
+    ) -> bool:
+        """
+        Update or delete calendar event when task is completed
+
+        Args:
+            event_id: Event ID to update/delete
+            completed: If True, mark as completed or delete
+            calendar_name: Calendar name (default: default calendar)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            schedule = self.account.schedule()
+            calendar = schedule.get_default_calendar() if not calendar_name else schedule.get_calendar(calendar_name=calendar_name)
+
+            if not calendar:
+                logger.error("Could not access Outlook calendar")
+                return False
+
+            # Get the event
+            event = calendar.get_event(event_id)
+            
+            if not event:
+                logger.warning(f"Event {event_id} not found")
+                return False
+
+            if completed:
+                # Option 1: Delete the event
+                event.delete()
+                logger.info(f"Deleted completed event: {event_id}")
+                
+                # Option 2: Update subject to mark as complete (uncomment to use instead)
+                # event.subject = f"[COMPLETED] {event.subject}"
+                # event.save()
+                # logger.info(f"Marked event as completed: {event_id}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error updating Outlook event: {str(e)}")
+            return False
+
+    def _format_action_item_description(self, item: Dict, meeting_title: str) -> str:
+        """Format action item as calendar event description"""
+        description = f"Action Item from Meeting: {meeting_title}\n\n"
+        description += f"Task: {item.get('description', 'N/A')}\n"
+        description += f"Owner: {item.get('owner', 'Unassigned')}\n"
+        description += f"Priority: {item.get('priority', 'Medium')}\n"
+        description += f"Due Date: {item.get('due_date', 'Not specified')}\n"
+
+        if item.get('context'):
+            description += f"\nContext:\n{item['context']}\n"
+
+        return description
+
+
 class JiraIntegration:
     """Jira integration for action item tracking"""
 
@@ -292,7 +453,7 @@ class AsanaIntegration:
             raise IntegrationError("Asana access token not configured")
 
         try:
-            self.client = Client.access_token(config.ASANA_ACCESS_TOKEN)
+            self.client = asana.Client.access_token(config.ASANA_ACCESS_TOKEN)
             logger.info("Asana client initialized successfully")
         except Exception as e:
             raise IntegrationError(f"Failed to initialize Asana client: {str(e)}")

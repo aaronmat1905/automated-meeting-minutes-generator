@@ -366,7 +366,7 @@ def process_meeting():
         return jsonify({'error': 'Internal server error'}), 500
 
 
-@app.route('/api/update-speakers', methods=['POST'])
+@app.route('/api/update-speakers', methods=['POST', 'PUT', 'PATCH'])
 def update_speaker_labels():
     """
     Update speaker labels in transcript
@@ -477,6 +477,139 @@ def custom_query():
     except Exception as e:
         logger.error(f"Error processing custom query: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/sync-to-calendar', methods=['POST'])
+def sync_to_calendar():
+    """
+    Sync action items to Google Calendar or Outlook Calendar
+
+    Request JSON:
+        - action_items: List of action items with due dates
+        - meeting_title: Title of the meeting
+        - calendar_type: 'google' or 'outlook' (default: 'google')
+        - calendar_id: Calendar ID (optional, uses default if not specified)
+
+    Response:
+        - created_events: List of created calendar events with IDs and links
+        - calendar_type: Which calendar service was used
+        - total_created: Number of events created
+    """
+    try:
+        from src.services.integrations import (
+            GoogleCalendarIntegration,
+            OutlookCalendarIntegration,
+            IntegrationError
+        )
+
+        data = request.get_json()
+
+        if not data or 'action_items' not in data:
+            return jsonify({'error': 'action_items are required'}), 400
+
+        action_items = data['action_items']
+        meeting_title = data.get('meeting_title', 'Meeting')
+        calendar_type = data.get('calendar_type', 'google').lower()
+        calendar_id = data.get('calendar_id')
+
+        if calendar_type not in ['google', 'outlook']:
+            return jsonify({'error': 'calendar_type must be "google" or "outlook"'}), 400
+
+        created_events = []
+
+        # Create calendar integration
+        if calendar_type == 'google':
+            try:
+                calendar_integration = GoogleCalendarIntegration(config)
+                created_events = calendar_integration.create_action_item_events(
+                    action_items,
+                    meeting_title,
+                    calendar_id=calendar_id
+                )
+            except IntegrationError as e:
+                return jsonify({'error': f'Google Calendar integration error: {str(e)}'}), 500
+
+        elif calendar_type == 'outlook':
+            try:
+                calendar_integration = OutlookCalendarIntegration(config)
+                created_events = calendar_integration.create_action_item_events(
+                    action_items,
+                    meeting_title,
+                    calendar_name=calendar_id
+                )
+            except IntegrationError as e:
+                return jsonify({'error': f'Outlook Calendar integration error: {str(e)}'}), 500
+
+        return jsonify({
+            'created_events': created_events,
+            'calendar_type': calendar_type,
+            'total_created': len(created_events),
+            'meeting_title': meeting_title
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error syncing to calendar: {str(e)}")
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+
+
+@app.route('/api/calendar/complete-task', methods=['POST'])
+def complete_calendar_task():
+    """
+    Mark calendar event as complete (delete or update)
+
+    Request JSON:
+        - event_id: Calendar event ID
+        - calendar_type: 'google' or 'outlook'
+        - calendar_id: Calendar ID (optional)
+
+    Response:
+        - success: True/False
+        - message: Status message
+    """
+    try:
+        from src.services.integrations import (
+            OutlookCalendarIntegration,
+            IntegrationError
+        )
+
+        data = request.get_json()
+
+        if not data or 'event_id' not in data or 'calendar_type' not in data:
+            return jsonify({'error': 'event_id and calendar_type are required'}), 400
+
+        event_id = data['event_id']
+        calendar_type = data.get('calendar_type', 'outlook').lower()
+        calendar_id = data.get('calendar_id')
+
+        # Currently only Outlook integration supports event deletion/update
+        if calendar_type == 'outlook':
+            try:
+                calendar_integration = OutlookCalendarIntegration(config)
+                success = calendar_integration.update_event_on_completion(
+                    event_id,
+                    completed=True,
+                    calendar_name=calendar_id
+                )
+
+                if success:
+                    return jsonify({
+                        'success': True,
+                        'message': 'Calendar event marked as complete'
+                    }), 200
+                else:
+                    return jsonify({
+                        'success': False,
+                        'message': 'Failed to update calendar event'
+                    }), 500
+
+            except IntegrationError as e:
+                return jsonify({'error': f'Outlook Calendar integration error: {str(e)}'}), 500
+        else:
+            return jsonify({'error': 'Event completion only supported for Outlook calendar currently'}), 400
+
+    except Exception as e:
+        logger.error(f"Error completing calendar task: {str(e)}")
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
 
 
 @app.errorhandler(404)

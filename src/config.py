@@ -57,6 +57,13 @@ class Config:
         'https://www.googleapis.com/auth/calendar.events'
     ]
 
+    # Outlook/Microsoft 365 Calendar Configuration
+    OUTLOOK_CLIENT_ID = os.getenv('OUTLOOK_CLIENT_ID')
+    OUTLOOK_CLIENT_SECRET = os.getenv('OUTLOOK_CLIENT_SECRET')
+    OUTLOOK_TENANT_ID = os.getenv('OUTLOOK_TENANT_ID', 'common')
+    OUTLOOK_REDIRECT_URI = os.getenv('OUTLOOK_REDIRECT_URI', 'http://localhost:5000/callback')
+    OUTLOOK_SCOPES = ['Calendars.ReadWrite', 'User.Read']
+
     # Application Settings
     MAX_AUDIO_FILE_SIZE_MB = int(os.getenv('MAX_AUDIO_FILE_SIZE_MB', '500'))
     MAX_AUDIO_FILE_SIZE_BYTES = MAX_AUDIO_FILE_SIZE_MB * 1024 * 1024
